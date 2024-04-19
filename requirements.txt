@@ -1,0 +1,3 @@
+requests
+bs4
+aiogram==2.23.1
