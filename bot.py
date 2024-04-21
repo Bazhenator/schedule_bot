@@ -4,19 +4,28 @@ import requests
 import telebot
 
 import config
-from keyboards import kb_start
-from types import months, weekdays
+from keyboards import kb_main, kb_menu
+from date_types import months, weekdays
 
 bot = telebot.TeleBot(config.TOKEN)
 
 
 @bot.message_handler(commands=['start'])
-def start_messages(message):
+def start_message(message):
     bot.delete_message(chat_id=message.chat.id,
                        message_id=message.message_id)
     bot.send_message(chat_id=message.from_user.id,
                      text="Привет, {0.first_name}!".format(message.from_user),
-                     reply_markup=kb_start)
+                     reply_markup=kb_main)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('main_menu'))
+def show_main_menu(call):
+    bot.delete_message(chat_id=call.message.chat.id,
+                       message_id=call.message.message_id)
+    bot.send_message(chat_id=call.message.chat.id,
+                     text="Выбери действие",
+                     reply_markup=kb_main)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('shedule_search'))
@@ -43,25 +52,29 @@ def shedule_search_by_group(message):
                      text=f"Неделя: {week_data['date_start']} - {week_data['date_end']}")
 
     days_data = json_data['days']
+    lessons_str = ''
     for day in days_data:
-        lessons_str = ''
         date = datetime.strptime(day['date'], "%Y-%m-%d")
 
-        lessons_str += f"{date.day} {months.get(date.month)}, {weekdays.get(day['weekday'])}\n"
+        lessons_str += "========================================\n"
+        lessons_str += f"*{date.day} {months.get(date.month)}, {weekdays.get(day['weekday'])}*\n"
+        lessons_str += "========================================\n"
 
         lessons = day['lessons']
         for lesson in lessons:
-            lessons_str += f"{lesson['time_start']} - {lesson['time_end']}\n"
-            lessons_str += f"*{lesson['subject']}*\n"
+            lessons_str += f"⏱️ _{lesson['time_start']} - {lesson['time_end']}_\n"
+            lessons_str += f"📖 {lesson['subject']}\n"
             lessons_str += f"📚 {lesson['typeObj']['name']}\n"
             if lesson['teachers']:
                 lessons_str += f"🧑‍🏫 {lesson['teachers'][0]['full_name']}\n"
             if lesson['lms_url']:
                 lessons_str += f"[🛜 СДО]({lesson['lms_url']})\n"
             lessons_str += "\n"
-        bot.send_message(chat_id=message.chat.id,
-                         text=lessons_str,
-                         parse_mode="Markdown")
+
+    bot.send_message(chat_id=message.chat.id,
+                     text=lessons_str,
+                     parse_mode="Markdown",
+                     reply_markup=kb_menu)
 
 
 if __name__ == '__main__':
