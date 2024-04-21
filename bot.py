@@ -63,8 +63,10 @@ def shedule_search_by_group(message):
         lessons = day['lessons']
         for lesson in lessons:
             lessons_str += f"⏱️ _{lesson['time_start']} - {lesson['time_end']}_\n"
-            lessons_str += f"📖 {lesson['subject']}\n"
             lessons_str += f"📚 {lesson['typeObj']['name']}\n"
+            lessons_str += f"📖 {lesson['subject']}\n"
+            lessons_str += f"🏫 {lesson['auditories'][0]['building']['name']}, {lesson['auditories'][0]['name']}\n"
+
             if lesson['teachers']:
                 lessons_str += f"🧑‍🏫 {lesson['teachers'][0]['full_name']}\n"
             if lesson['lms_url']:
