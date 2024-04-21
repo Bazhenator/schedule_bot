@@ -53,6 +53,8 @@ def shedule_search_by_group(message):
             lessons_str += f"{lesson['typeObj']['name']}\n"
             if lesson['teachers']:
                 lessons_str += f"{lesson['teachers'][0]['full_name']}\n"
+            if lesson['lms_url']:
+                lessons_str += f"[СДО]({lesson['lms_url']})\n"
             lessons_str += "\n"
         bot.send_message(message.chat.id, text=lessons_str, parse_mode="Markdown")
 
