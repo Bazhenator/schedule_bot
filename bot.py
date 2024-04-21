@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 
 import requests
 import telebot
@@ -8,6 +9,8 @@ from keyboards import kb_main, kb_menu
 from date_types import months, weekdays
 
 bot = telebot.TeleBot(config.TOKEN)
+logger = telebot.logger
+telebot.logger.setLevel(logging.DEBUG)
 
 
 @bot.message_handler(commands=['start'])
@@ -33,7 +36,8 @@ def shedule_search(call):
     bot.delete_message(chat_id=call.message.chat.id,
                        message_id=call.message.message_id)
     msg = bot.send_message(chat_id=call.message.chat.id,
-                           text="Введи номер своей группы")
+                           text="Введи номер своей группы",
+                           reply_markup=kb_menu)
     bot.register_next_step_handler(message=msg,
                                    callback=shedule_search_by_group)
 
@@ -87,5 +91,5 @@ def shedule_search_by_group(message):
 
 
 if __name__ == '__main__':
-    bot.polling(none_stop=True,
+    bot.polling(non_stop=True,
                 interval=0)
