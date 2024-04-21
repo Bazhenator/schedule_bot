@@ -1,110 +1,95 @@
-# Modules import
-import logging
-import asyncio
-from aiogram import Bot, Dispatcher, executor, types
 from datetime import datetime
-import pytz
+import logging
 
-# Header files
-import parcing
-from sqlighter import SQLighter
-from keyboard import keyboard, inline_keyboard
-import encode
-# Logs level
-logging.basicConfig(level=logging.INFO)
+import requests
+import telebot
 
-# Bot initialization
-bot = Bot(token='$TOKEN')
-dp = Dispatcher(bot)
+import config
+from keyboards import kb_main, kb_menu
+from date_types import months, weekdays
 
-# Base initialisation
-db = SQLighter('telegrambot_database_new.db')
+bot = telebot.TeleBot(config.TOKEN)
+logger = telebot.logger
+telebot.logger.setLevel(logging.DEBUG)
 
 
-# First initialization
-@dp.message_handler(commands=['start'])
-async def start(message: types.Message):
-    if not db.subscriber_exists(message.from_user.id):
-        db.add_subscriber(message.from_user.id)
-    await message.answer('Вы успешно начали работу с ботом')
-    await message.answer('Выберете институт, в котором Вы учитесь',
-                         reply_markup=keyboard(parcing.universities().keys()))
+@bot.message_handler(commands=['start'])
+def start_message(message):
+    bot.delete_message(chat_id=message.chat.id,
+                       message_id=message.message_id)
+    bot.send_message(chat_id=message.from_user.id,
+                     text="Привет, {0.first_name}!".format(message.from_user),
+                     reply_markup=kb_main)
 
 
-@dp.message_handler(lambda message: message.text in list(parcing.universities().keys()))
-async def choose_group(message: types.Message):
-    group_link = parcing.universities()[message.text]
-    db.update_link(message.from_user.id, 'week_url', group_link)
-    await message.answer('Выберете группу, в которой Вы учитесь',
-                         reply_markup=keyboard(parcing.groups(group_link).keys()))
+@bot.callback_query_handler(func=lambda call: call.data.startswith('main_menu'))
+def show_main_menu(call):
+    bot.delete_message(chat_id=call.message.chat.id,
+                       message_id=call.message.message_id)
+    bot.send_message(chat_id=call.message.chat.id,
+                     text="Выбери действие",
+                     reply_markup=kb_main)
 
 
-@dp.message_handler(lambda x: x.text in list(parcing.groups(db.get_link(x.from_user.id, 'week_url')).keys()))
-async def schedule(message: types.Message):
-    schedule_url = parcing.groups(db.get_link(message.from_user.id, 'week_url'))[message.text] + '?'
-    weekday = datetime.now(pytz.timezone('Europe/Moscow')).weekday()
-    db.update_link(message.from_user.id, 'week_url', schedule_url)
-    db.update_weekday(message.from_user.id, weekday)
-    parcing.update_week_urls(message.from_user.id, schedule_url)
-    parcing.update_encoded_week(message.from_user.id)
-    await message.answer('Ваше расписание в процессе загрузки...',
-                         reply_markup=types.ReplyKeyboardRemove())
-    msg = parcing.parse_week(message.from_user.id, weekday)[0]
-    await bot.send_message(message.from_user.id,
-                           msg,
-                           reply_markup=inline_keyboard(), parse_mode=types.ParseMode.MARKDOWN)
+@bot.callback_query_handler(func=lambda call: call.data.startswith('shedule_search'))
+def shedule_search(call):
+    bot.delete_message(chat_id=call.message.chat.id,
+                       message_id=call.message.message_id)
+    msg = bot.send_message(chat_id=call.message.chat.id,
+                           text="Введи номер своей группы",
+                           reply_markup=kb_menu)
+    bot.register_next_step_handler(message=msg,
+                                   callback=shedule_search_by_group)
 
 
-@dp.callback_query_handler(text="nextBtn")
-async def switch_next_week(message: types.Message):
-    weekday = db.get_weekday(message.from_user.id) + 1
-    msg = parcing.parse_week(message.from_user.id, weekday)[0]
-    await bot.edit_message_text(msg, message.from_user.id,
-                                message.message.message_id,
-                                reply_markup=inline_keyboard(), parse_mode=types.ParseMode.MARKDOWN)
-    need_to_switch = parcing.parse_week(message.from_user.id, weekday)[1]
-    db.update_weekday(message.from_user.id, weekday)
-    if need_to_switch:
-        db.update_link(message.from_user.id, 'week_url',
-                       db.get_link(message.from_user.id, 'prev_week_url' if need_to_switch == -1 else 'next_week_url'))
-        asyncio.create_task(parcing.update_encoded_week(message.from_user.id))
+def shedule_search_by_group(message):
+    bot.delete_message(chat_id=message.chat.id,
+                       message_id=message.message_id)
 
+    json_data = requests.get(f"https://ruz.spbstu.ru/api/v1/ruz/search/groups?q={message.text}").json()
+    if not json_data['groups']:
+        msg = bot.send_message(chat_id=message.chat.id,
+                               text="Не нашел такой группы. Попробуй еще раз.")
+        bot.register_next_step_handler(message=msg,
+                                       callback=shedule_search_by_group)
+        return
 
-@dp.callback_query_handler(text="prevBtn")
-async def switch_prev_week(message: types.Message):
-    schedule_url = db.get_link(message.from_user.id, 'week_url')
-    weekday = db.get_weekday(message.from_user.id) - 1
-    msg = parcing.parse_week(message.from_user.id, weekday)[0]
-    await bot.edit_message_text(msg, message.from_user.id,
-                                message.message.message_id,
-                                reply_markup=inline_keyboard(), parse_mode=types.ParseMode.MARKDOWN)
-    need_to_switch = parcing.parse_week(message.from_user.id, weekday)[1]
-    db.update_weekday(message.from_user.id, weekday)
-    if need_to_switch:
-        db.update_link(message.from_user.id, 'week_url',
-                       db.get_link(message.from_user.id, 'prev_week_url' if need_to_switch == -1 else 'next_week_url'))
-        asyncio.create_task(parcing.update_encoded_week(message.from_user.id))
+    group_data = json_data['groups']
+    group_id = group_data[0]['id']
 
+    json_data = requests.get(f"https://ruz.spbstu.ru/api/v1/ruz/scheduler/{group_id}").json()
+    week_data = json_data['week']
+    bot.send_message(chat_id=message.chat.id,
+                     text=f"Неделя: {week_data['date_start']} - {week_data['date_end']}")
 
-@dp.callback_query_handler(text="delete")
-async def delete_message(message: types.Message):
-    await bot.delete_message(message.from_user.id, message.message.message_id)
+    days_data = json_data['days']
+    lessons_str = ''
+    for day in days_data:
+        date = datetime.strptime(day['date'], "%Y-%m-%d")
 
+        lessons_str += "========================================\n"
+        lessons_str += f"*{date.day} {months.get(date.month)}, {weekdays.get(day['weekday'])}*\n"
+        lessons_str += "========================================\n"
 
-@dp.message_handler(commands=['subs_number'])
-async def start(message: types.Message):
-    await message.answer(str(len(db.get_subscriptions())))
+        lessons = day['lessons']
+        for lesson in lessons:
+            lessons_str += f"⏱️ _{lesson['time_start']} - {lesson['time_end']}_\n"
+            lessons_str += f"📚 {lesson['typeObj']['name']}\n"
+            lessons_str += f"📖 {lesson['subject']}\n"
+            lessons_str += f"🏫 {lesson['auditories'][0]['building']['name']}, {lesson['auditories'][0]['name']}\n"
 
+            if lesson['teachers']:
+                lessons_str += f"🧑‍🏫 {lesson['teachers'][0]['full_name']}\n"
+            if lesson['lms_url']:
+                lessons_str += f"[🛜 СДО]({lesson['lms_url']})\n"
+            lessons_str += "\n"
 
-async def scheduled(wait_for):
-    while True:
-        await asyncio.sleep(wait_for)
-        # получаем список подписчиков бота
-        subscriptions = db.get_subscriptions()
-        for user_id in subscriptions:
-            parcing.update_encoded_week(user_id)
+    bot.send_message(chat_id=message.chat.id,
+                     text=lessons_str,
+                     parse_mode="Markdown",
+                     reply_markup=kb_menu)
+
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    # loop.create_task(scheduled(10))  # Каждые 10 минут проверка
-    executor.start_polling(dp, skip_updates=True)
+    bot.polling(non_stop=True,
+                interval=0)
