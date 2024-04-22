@@ -1,17 +1,19 @@
-from datetime import datetime
 import logging
 
-import requests
 import telebot
 
 import config
-from keyboards import kb_main, kb_menu
-from date_types import months, weekdays
-from dialogs import *
+from datetime import datetime
+
+import requests
+
+from states import weekdays, months
+from text import help_reply
+from kb import kb_main, kb_menu
 
 bot = telebot.TeleBot(config.TOKEN)
 logger = telebot.logger
-telebot.logger.setLevel(logging.DEBUG)
+telebot.logger.setLevel(logging.INFO)
 
 
 @bot.message_handler(commands=['start'])
@@ -25,8 +27,11 @@ def start_message(message):
 
 @bot.message_handler(commands=['help'])
 def help_message(message):
-    bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-    bot.send_message(chat_id=message.chat.id, text=help_reply, parse_mode='HTML', reply_markup=kb_menu)
+    bot.delete_message(chat_id=message.chat.id,
+                       message_id=message.message_id)
+    bot.send_message(chat_id=message.chat.id,
+                     text=help_reply, parse_mode='HTML',
+                     reply_markup=kb_menu)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('main_menu'))
@@ -97,6 +102,11 @@ def shedule_search_by_group(message):
                      parse_mode="Markdown",
                      reply_markup=kb_menu)
 
+
+bot.set_my_commands([
+    telebot.types.BotCommand("/start", "Основное меню"),
+    telebot.types.BotCommand("/help", "Описание бота и команд")
+])
 
 if __name__ == '__main__':
     bot.polling(non_stop=True,
