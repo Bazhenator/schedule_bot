@@ -56,7 +56,8 @@ def shedule_search_by_group(message):
     json_data = requests.get(f"https://ruz.spbstu.ru/api/v1/ruz/search/groups?q={message.text}").json()
     if not json_data['groups']:
         msg = bot.send_message(chat_id=message.chat.id,
-                               text="Не нашел такой группы. Попробуй еще раз.")
+                               text="Не нашел такой группы. Попробуй еще раз.",
+                               reply_markup=kb_menu)
         bot.register_next_step_handler(message=msg,
                                        callback=shedule_search_by_group)
         return
