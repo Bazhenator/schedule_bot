@@ -1,17 +1,19 @@
-from datetime import datetime
 import logging
 
-import requests
 import telebot
 
+from datetime import datetime
+
+import requests
+
+from states import weekdays, months
+from text import text_messages
+from kb import kb_main, kb_menu
 import config
-from keyboards import kb_main, kb_menu
-from date_types import months, weekdays
-from dialogs import *
 
 bot = telebot.TeleBot(config.TOKEN)
 logger = telebot.logger
-telebot.logger.setLevel(logging.DEBUG)
+telebot.logger.setLevel(logging.INFO)
 
 
 @bot.message_handler(commands=['start'])
@@ -19,14 +21,17 @@ def start_message(message):
     bot.delete_message(chat_id=message.chat.id,
                        message_id=message.message_id)
     bot.send_message(chat_id=message.from_user.id,
-                     text="Привет, {0.first_name}!".format(message.from_user),
+                     text=text_messages['intro'].format(message.from_user),
                      reply_markup=kb_main)
 
 
 @bot.message_handler(commands=['help'])
 def help_message(message):
-    bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-    bot.send_message(chat_id=message.chat.id, text=help_reply, parse_mode='HTML', reply_markup=kb_menu)
+    bot.delete_message(chat_id=message.chat.id,
+                       message_id=message.message_id)
+    bot.send_message(chat_id=message.chat.id,
+                     text=text_messages['info'], parse_mode='HTML',
+                     reply_markup=kb_menu)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('main_menu'))
@@ -34,7 +39,7 @@ def show_main_menu(call):
     bot.delete_message(chat_id=call.message.chat.id,
                        message_id=call.message.message_id)
     bot.send_message(chat_id=call.message.chat.id,
-                     text="Выбери действие",
+                     text=text_messages['choose_action'],
                      reply_markup=kb_main)
 
 
@@ -43,23 +48,27 @@ def shedule_search(call):
     bot.delete_message(chat_id=call.message.chat.id,
                        message_id=call.message.message_id)
     msg = bot.send_message(chat_id=call.message.chat.id,
-                           text="Введи номер своей группы",
+                           text=text_messages['enter_group'],
                            reply_markup=kb_menu)
     bot.register_next_step_handler(message=msg,
                                    callback=shedule_search_by_group)
 
 
 def shedule_search_by_group(message):
+    if message.text == '/start':
+        return start_message(message)
+    if message.text == '/help':
+        return help_message(message)
+
     bot.delete_message(chat_id=message.chat.id,
                        message_id=message.message_id)
 
     json_data = requests.get(f"https://ruz.spbstu.ru/api/v1/ruz/search/groups?q={message.text}").json()
     if not json_data['groups']:
-        msg = bot.send_message(chat_id=message.chat.id,
-                               text="Не нашел такой группы. Попробуй еще раз.")
-        bot.register_next_step_handler(message=msg,
-                                       callback=shedule_search_by_group)
-        return
+        bot.send_message(chat_id=message.chat.id,
+                         text=text_messages['wrong_group'],
+                         reply_markup=kb_menu)
+        return bot.register_next_step_handler(message, shedule_search_by_group)
 
     group_data = json_data['groups']
     group_id = group_data[0]['id']
@@ -97,6 +106,13 @@ def shedule_search_by_group(message):
                      reply_markup=kb_menu)
 
 
+def main():
+    bot.set_my_commands([
+        telebot.types.BotCommand("/start", "Основное меню"),
+        telebot.types.BotCommand("/help", "Описание бота и команд")
+    ])
+    bot.polling(none_stop=True)
+
+
 if __name__ == '__main__':
-    bot.polling(non_stop=True,
-                interval=0)
+    main()
