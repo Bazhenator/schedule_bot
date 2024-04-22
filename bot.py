@@ -7,6 +7,7 @@ import telebot
 import config
 from keyboards import kb_main, kb_menu
 from date_types import months, weekdays
+from dialogs import *
 
 bot = telebot.TeleBot(config.TOKEN)
 logger = telebot.logger
@@ -20,6 +21,12 @@ def start_message(message):
     bot.send_message(chat_id=message.from_user.id,
                      text="Привет, {0.first_name}!".format(message.from_user),
                      reply_markup=kb_main)
+
+
+@bot.message_handler(commands=['help'])
+def help_message(message):
+    bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+    bot.send_message(chat_id=message.chat.id, text=help_reply, parse_mode='HTML', reply_markup=kb_menu)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('main_menu'))
