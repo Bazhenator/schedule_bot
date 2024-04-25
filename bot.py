@@ -83,8 +83,11 @@ def schedule_search_by_teacher(message):
     json_data = requests.get(f"https://ruz.spbstu.ru/api/v1/ruz/teachers/{teacher_id}/scheduler").json()
 
     week_data = json_data['week']
+    date_start = datetime.strptime(week_data['date_start'], "%Y.%m.%d")
+    date_end = datetime.strptime(week_data['date_end'], "%Y.%m.%d")
     bot.send_message(chat_id=message.chat.id,
-                     text=f"Неделя: {week_data['date_start']} - {week_data['date_end']}")
+                     text=f"Неделя: {date_start.day:02d}.{date_start.month:02d}.{date_start.year} "
+                          f"- {date_end.day:02d}.{date_end.month:02d}.{date_end.year}")
 
     days_data = json_data['days']
     lessons_str = ''
